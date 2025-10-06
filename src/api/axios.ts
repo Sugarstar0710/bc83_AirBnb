@@ -5,16 +5,18 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  // tokenCybersoft (bắt buộc)
+  // Chỉ dùng tokenCybersoft duy nhất
   const cyberToken = import.meta.env.VITE_CYBERSOFT_TOKEN;
   if (cyberToken) {
-    config.headers["tokenCybersoft"] = cyberToken; // đúng key
+    config.headers["tokenCybersoft"] = cyberToken;
   }
 
-  // token user (nếu login)
-  const userToken = localStorage.getItem("access_token");
-  if (userToken) {
-    config.headers.Authorization = `Bearer ${userToken}`;
+  // Debug logging
+  console.log(`🚀 API Request: ${config.method?.toUpperCase()} ${config.baseURL}${config.url}`);
+  console.log('💎 CyberSoft Token:', cyberToken ? `${cyberToken.substring(0, 30)}...` : '❌ MISSING');
+  
+  if (config.data && config.method !== 'get') {
+    console.log('📤 Request data:', config.data);
   }
 
   return config;
