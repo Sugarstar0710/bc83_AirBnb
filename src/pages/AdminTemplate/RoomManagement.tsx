@@ -1,8 +1,10 @@
 import { useState, useMemo, useRef, useCallback } from 'react';
 import { Search, Plus, Trash2, MapPin, ChevronLeft, ChevronRight, AlertTriangle, Edit, Eye, X, Upload } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { RoomService } from '../../services/room.service';
+import { phongServices } from '../../services/room.service';
+import { viTriServices } from '../../services/location.service';
 import type { Room } from '../../Types/room';
+import type { Location } from '../../Types/location';
 import { formatCurrency } from '../../lib/formatters';
 import { authService } from '../../services/auth.service';
 
@@ -58,82 +60,41 @@ function RoomManagement() {
   const pageSize = 6;
   const queryClient = useQueryClient();
 
-  // Enhanced room loading with smart fallback strategy
+  // BC83 pattern - Load rooms
   const { data: roomsData, isLoading } = useQuery({
     queryKey: ['rooms-all'],
     queryFn: async () => {
-      try {
-        console.log('🔄 Loading rooms from CyberSoft API...');
-        const apiRooms = await RoomService.paged(1, 10000);
-        
-        // Merge with local demo rooms
-        const localRooms = JSON.parse(localStorage.getItem('demo_rooms') || '[]');
-        console.log(`📊 Found ${apiRooms.data?.length || 0} API rooms + ${localRooms.length} local rooms`);
-        
-        return {
-          ...apiRooms,
-          data: [...(apiRooms.data || []), ...localRooms]
-        };
-      } catch (err) {
-        console.warn('⚠️ CyberSoft API failed, using enhanced fallback:', err);
-        
-        // Fallback: Use local rooms + some demo data
-        const localRooms = JSON.parse(localStorage.getItem('demo_rooms') || '[]');
-        const demoRooms = [
-          { 
-            id: 999001, 
-            tenPhong: '🏠 Demo Villa Deluxe', 
-            khach: 6, 
-            phongNgu: 3, 
-            giuong: 4,
-            phongTam: 2,
-            moTa: 'Villa sang trọng với view biển tuyệt đẹp, đầy đủ tiện nghi hiện đại',
-            giaTien: 2500000, 
-            mayGiat: true,
-            banLa: true,
-            tivi: true, 
-            dieuHoa: true,
-            wifi: true,
-            bep: true,
-            doXe: true,
-            hoBoi: true,
-            banUi: true,
-            maViTri: 1,
-            hinhAnh: 'https://images.unsplash.com/photo-1566073771259-6a8506099945?w=400'
-          },
-          { 
-            id: 999002, 
-            tenPhong: '🏨 Demo Apartment Modern', 
-            khach: 4, 
-            phongNgu: 2,
-            giuong: 2, 
-            phongTam: 1,
-            moTa: 'Căn hộ hiện đại ngay trung tâm thành phố, tiện nghi đầy đủ',
-            giaTien: 1200000,
-            mayGiat: true,
-            banLa: false,
-            tivi: true,
-            dieuHoa: true, 
-            wifi: true,
-            bep: true,
-            doXe: false,
-            hoBoi: false,
-            banUi: false,
-            maViTri: 2,
-            hinhAnh: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?w=400'
-          }
-        ];
-        
-        return { 
-          data: [...localRooms, ...demoRooms],
-          pageIndex: 1, 
-          pageSize: 1000,
-          totalRow: localRooms.length + demoRooms.length
-        };
-      }
+      console.log('🔄 Loading rooms with BC83 pattern...');
+      const response = await phongServices.getListPhong();
+      console.log('✅ Response:', response.data);
+      
+      return {
+        data: response.data.content || [],
+        pageIndex: 1,
+        pageSize: 10000,
+        totalRow: response.data.content?.length || 0
+      };
     },
-    staleTime: 2 * 60 * 1000, // 2 minutes - shorter for better UX
+    staleTime: 2 * 60 * 1000,
   });
+
+  // BC83 pattern - Load locations for dropdown
+  const { data: locationsData } = useQuery({
+    queryKey: ['locations-all'],
+    queryFn: async () => {
+      const response = await viTriServices.getListViTri();
+      return response.data.content || [];
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+  });
+
+  // Helper function to get location name by ID
+  const getLocationName = useCallback((maViTri: number): string => {
+    if (!locationsData) return `#${maViTri}`;
+    const location = locationsData.find((loc: Location) => loc.id === maViTri);
+    if (!location) return `#${maViTri}`;
+    return `${location.tenViTri}, ${location.tinhThanh}`;
+  }, [locationsData]);
 
   // Filter rooms based on search term
   const filteredRooms = useMemo(() => {
@@ -180,104 +141,91 @@ function RoomManagement() {
     }, 200);
   }, [currentPage, isChangingPage]);
 
-  // Enhanced delete mutation with smart fallback
+  // BC83 Delete mutation
   const deleteMutation = useMutation({
     mutationFn: async (roomId: number) => {
-      // Try API first
-      try {
-        await RoomService.deleteRoom(roomId);
-        return { method: 'api', roomId };
-      } catch (error) {
-        console.warn(`⚠️ API delete failed for room ${roomId}, trying local delete:`, error);
-        
-        // Fallback: Remove from localStorage
-        const localRooms = JSON.parse(localStorage.getItem('demo_rooms') || '[]');
-        const updatedRooms = localRooms.filter((room: any) => room.id !== roomId);
-        localStorage.setItem('demo_rooms', JSON.stringify(updatedRooms));
-        
-        return { method: 'local', roomId };
-      }
+      const response = await phongServices.deletePhong(roomId);
+      return response.data;
     },
     onMutate: (roomId) => {
       setDeletingRoomId(roomId);
-      console.log('🗑️ Starting enhanced delete for room:', roomId);
+      console.log('🗑️ Deleting room:', roomId);
     },
-    onSuccess: (result) => {
-      const { method, roomId } = result;
-      console.log(`✅ Delete successful via ${method} for room:`, roomId);
+    onSuccess: (data, roomId) => {
+      console.log('✅ Delete successful:', data);
       
       queryClient.refetchQueries({ queryKey: ['rooms-all'] });
       setShowDeleteModal(false);
       setRoomToDelete(null);
       setDeletingRoomId(null);
       
-      // Smart success message
-      if (method === 'api') {
-        alert(`🎉 Xóa phòng #${roomId} thành công từ CyberSoft API!`);
-      } else {
-        alert(`🎭 DEMO: Phòng #${roomId} đã được xóa khỏi demo database!\n\n💡 Lưu ý: Chỉ có thể xóa phòng demo vì CyberSoft API readonly.`);
-      }
+      alert(`🎉 Xóa phòng #${roomId} thành công!`);
     },
     onError: (error: any, roomId) => {
-      console.error('❌ Delete error for room:', roomId, error);
-      const errorMessage = error?.message || error?.response?.data?.message || 'Lỗi xóa phòng!';
+      console.error('❌ Delete error:', error);
+      const errorMessage = error?.response?.data?.content || error?.message || 'Lỗi xóa phòng!';
       alert(`🚨 Lỗi xóa phòng #${roomId}: ${errorMessage}`);
       setDeletingRoomId(null);
     },
   });
 
-  // Enhanced create mutation with smart feedback
+  // BC83 Create mutation
   const createMutation = useMutation({
-    mutationFn: RoomService.createRoom,
+    mutationFn: async (roomData: Omit<Room, 'id'>) => {
+      const response = await phongServices.createPhong(roomData);
+      return response.data.content;
+    },
     onSuccess: (newRoom) => {
       console.log('✅ Create successful:', newRoom);
       queryClient.refetchQueries({ queryKey: ['rooms-all'] });
       setShowRoomModal(false);
       resetForm();
       
-      // Smart success message
-      const isDemo = newRoom.id >= 999000 || localStorage.getItem('demo_rooms')?.includes(String(newRoom.id));
-      if (isDemo) {
-        alert(`🎭 DEMO: Phòng "${newRoom.tenPhong}" đã được tạo thành công trong demo database!\n\n💡 Lưu ý: CyberSoft API chỉ cho phép đọc dữ liệu với student account.`);
-      } else {
-        alert(`🎉 Tạo phòng "${newRoom.tenPhong}" thành công trên CyberSoft API!`);
-      }
+      alert(`🎉 Tạo phòng "${newRoom.tenPhong}" thành công!`);
     },
     onError: (error: any) => {
       console.error('❌ Create error:', error);
-      const errorMessage = error?.message || error?.response?.data?.message || 'Lỗi tạo phòng!';
+      const errorMessage = error?.response?.data?.content || error?.message || 'Lỗi tạo phòng!';
       alert(`🚨 Lỗi tạo phòng: ${errorMessage}`);
     },
   });
 
-  // Update mutation
+  // BC83 Update mutation
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }: { id: number; data: Partial<Room> }) => RoomService.updateRoom(id, data),
+    mutationFn: async ({ id, data }: { id: number; data: Partial<Room> }) => {
+      const response = await phongServices.updatePhong(id, data);
+      return response.data.content;
+    },
     onSuccess: (updatedRoom, { id }) => {
-      console.log('Update successful:', updatedRoom);
+      console.log('✅ Update successful:', updatedRoom);
       queryClient.refetchQueries({ queryKey: ['rooms-all'] });
       setShowRoomModal(false);
       resetForm();
-      alert(`Cập nhật phòng #${id} thành công!`);
+      alert(`🎉 Cập nhật phòng #${id} thành công!`);
     },
     onError: (error: any, { id }) => {
-      console.error('Update error:', error);
-      const errorMessage = error?.message || error?.response?.data?.message || 'Lỗi cập nhật phòng!';
-      alert(`Lỗi cập nhật phòng #${id}: ${errorMessage}`);
+      console.error('❌ Update error:', error);
+      const errorMessage = error?.response?.data?.content || error?.message || 'Lỗi cập nhật phòng!';
+      alert(`🚨 Lỗi cập nhật phòng #${id}: ${errorMessage}`);
     },
   });
 
-  // Upload image mutation
+  // BC83 Upload image mutation
   const uploadImageMutation = useMutation({
-    mutationFn: ({ id, formData }: { id: number; formData: FormData }) => RoomService.uploadRoomImage(id, formData),
+    mutationFn: async ({ id, formData }: { id: number; formData: FormData }) => {
+      const response = await phongServices.uploadHinhPhong(id, formData);
+      return response.data.content;
+    },
     onSuccess: () => {
       queryClient.refetchQueries({ queryKey: ['rooms-all'] });
       setImageFile(null);
       setImagePreview('');
+      alert('🎉 Tải ảnh thành công!');
     },
     onError: (error: any) => {
-      console.error('Upload error:', error);
-      alert(error.message || 'Lỗi tải ảnh!');
+      console.error('❌ Upload error:', error);
+      const errorMessage = error?.response?.data?.content || error?.message || 'Lỗi tải ảnh!';
+      alert(`🚨 ${errorMessage}`);
     },
   });
 
@@ -334,11 +282,11 @@ function RoomManagement() {
   };
 
   // Form handlers
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' ? Number(value) : value
+      [name]: type === 'number' || name === 'maViTri' ? Number(value) : value
     }));
   };
 
@@ -545,7 +493,9 @@ function RoomManagement() {
                   {/* Location */}
                   <div className="flex items-center text-gray-600 mb-3">
                     <MapPin className="w-4 h-4 mr-2 text-red-500 flex-shrink-0" />
-                    <span className="text-sm">Vị trí: {room.maViTri || 'N/A'}</span>
+                    <span className="text-sm truncate">
+                      {getLocationName(room.maViTri)}
+                    </span>
                   </div>
                   
                   {/* Room details */}
@@ -767,6 +717,14 @@ function RoomManagement() {
                     </div>
                     
                     <div>
+                      <strong>Vị trí:</strong>
+                      <div className="flex items-center mt-1">
+                        <MapPin className="w-4 h-4 mr-2 text-red-500" />
+                        <span className="text-gray-700">{selectedRoom && getLocationName(selectedRoom.maViTri)}</span>
+                      </div>
+                    </div>
+                    
+                    <div>
                       <strong>Mô tả:</strong>
                       <p className="text-gray-600 mt-1">{selectedRoom?.moTa}</p>
                     </div>
@@ -913,16 +871,21 @@ function RoomManagement() {
                       </div>
 
                       <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Mã vị trí *</label>
-                        <input
-                          type="number"
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label>
+                        <select
                           name="maViTri"
                           value={formData.maViTri || ''}
                           onChange={handleInputChange}
                           required
-                          min="1"
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
+                        >
+                          <option value="">Chọn vị trí...</option>
+                          {locationsData?.map((location: Location) => (
+                            <option key={location.id} value={location.id}>
+                              {location.tenViTri}, {location.tinhThanh} - {location.quocGia}
+                            </option>
+                          ))}
+                        </select>
                       </div>
                     </div>
                   </div>

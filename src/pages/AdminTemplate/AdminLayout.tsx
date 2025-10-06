@@ -10,7 +10,8 @@ import {
   BarChart3,
   User,
   Settings,
-  ChevronDown
+  ChevronDown,
+  MapPin
 } from 'lucide-react';
 import { authService } from '../../services/auth.service';
 
@@ -59,6 +60,7 @@ const AdminLayout: React.FC<AdminLayoutProps> = () => {
     { icon: BarChart3, label: 'Dashboard', path: '/' },
     { icon: Users, label: 'Quản lý người dùng', path: '/users' },
     { icon: Home, label: 'Quản lý phòng', path: '/rooms' },
+    { icon: MapPin, label: 'Quản lý vị trí', path: '/locations' },
   ];
 
   return (
