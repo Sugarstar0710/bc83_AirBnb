@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Thư mục mẫu - không commit
+BC83_AirBnb_Project/
