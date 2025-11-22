@@ -2,9 +2,7 @@ import { useState, useMemo, useRef, useCallback } from 'react';
 import { Search, Plus, Trash2, MapPin, ChevronLeft, ChevronRight, AlertTriangle, Edit, Eye, X, Upload } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { phongServices } from '../../services/room.service';
-import { viTriServices } from '../../services/location.service';
 import type { Room } from '../../Types/room';
-import type { Location } from '../../Types/location';
 import { formatCurrency } from '../../lib/formatters';
 import { authService } from '../../services/auth.service';
 
@@ -57,7 +55,7 @@ function RoomManagement() {
   const [imageFile, setImageFile] = useState<File | null>(null);
   const [imagePreview, setImagePreview] = useState<string>('');
   
-  const pageSize = 6;
+  const pageSize = 10;
   const queryClient = useQueryClient();
 
   // BC83 pattern - Load rooms
@@ -77,24 +75,6 @@ function RoomManagement() {
     },
     staleTime: 2 * 60 * 1000,
   });
-
-  // BC83 pattern - Load locations for dropdown
-  const { data: locationsData } = useQuery({
-    queryKey: ['locations-all'],
-    queryFn: async () => {
-      const response = await viTriServices.getListViTri();
-      return response.data.content || [];
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-  });
-
-  // Helper function to get location name by ID
-  const getLocationName = useCallback((maViTri: number): string => {
-    if (!locationsData) return `#${maViTri}`;
-    const location = locationsData.find((loc: Location) => loc.id === maViTri);
-    if (!location) return `#${maViTri}`;
-    return `${location.tenViTri}, ${location.tinhThanh}`;
-  }, [locationsData]);
 
   // Filter rooms based on search term
   const filteredRooms = useMemo(() => {
@@ -205,8 +185,17 @@ function RoomManagement() {
     },
     onError: (error: any, { id }) => {
       console.error('❌ Update error:', error);
-      const errorMessage = error?.response?.data?.content || error?.message || 'Lỗi cập nhật phòng!';
-      alert(`🚨 Lỗi cập nhật phòng #${id}: ${errorMessage}`);
+      
+      // Check if it's a permission error
+      if (error?.response?.status === 403) {
+        alert(`🚨 Không có quyền cập nhật phòng #${id}!\n\n` +
+              `Lý do: Phòng này không phải do bạn tạo ra.\n` +
+              `Bạn chỉ có thể sửa/xóa những phòng do chính tài khoản của bạn tạo.\n\n` +
+              `💡 Giải pháp: Tạo phòng mới bằng nút "Thêm phòng" để có quyền chỉnh sửa.`);
+      } else {
+        const errorMessage = error?.response?.data?.content || error?.message || 'Lỗi cập nhật phòng!';
+        alert(`🚨 Lỗi cập nhật phòng #${id}: ${errorMessage}`);
+      }
     },
   });
 
@@ -234,6 +223,19 @@ function RoomManagement() {
       alert('Bạn cần đăng nhập để xóa phòng!');
       return;
     }
+    
+    // Warn if trying to delete system rooms
+    if (room.id < 100) {
+      const confirmDelete = confirm(
+        `⚠️ Cảnh báo: Phòng #${room.id} có vẻ là phòng mẫu của hệ thống.\n\n` +
+        `Bạn có thể không có quyền xóa phòng này.\n` +
+        `Chỉ có thể xóa những phòng do chính bạn tạo ra.\n\n` +
+        `Bạn có chắc muốn thử xóa?`
+      );
+      
+      if (!confirmDelete) return;
+    }
+    
     setRoomToDelete(room);
     setShowDeleteModal(true);
   };
@@ -269,6 +271,17 @@ function RoomManagement() {
       alert('Bạn cần đăng nhập để chỉnh sửa phòng!');
       return;
     }
+    
+    // Warn if trying to edit system rooms
+    if (room.id < 100) {
+      alert(
+        `⚠️ Lưu ý: Phòng #${room.id} có vẻ là phòng mẫu của hệ thống.\n\n` +
+        `Bạn có thể không có quyền sửa phòng này vì nó không phải do bạn tạo.\n` +
+        `Nếu gặp lỗi "403 Forbidden", hãy tạo phòng mới để có quyền chỉnh sửa.\n\n` +
+        `Bạn vẫn có thể xem form để tham khảo thông tin.`
+      );
+    }
+    
     setFormData(room);
     setSelectedRoom(room);
     setModalMode('edit');
@@ -282,11 +295,11 @@ function RoomManagement() {
   };
 
   // Form handlers
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const { name, value, type } = e.target;
     setFormData(prev => ({
       ...prev,
-      [name]: type === 'number' || name === 'maViTri' ? Number(value) : value
+      [name]: type === 'number' ? Number(value) : value
     }));
   };
 
@@ -405,38 +418,14 @@ function RoomManagement() {
       <div className="flex justify-between items-center">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">🏠 Quản lý phòng</h1>
-          <div className="space-y-2">
-            <p className="text-gray-600">
-              Quản lý thông tin các phòng cho thuê
-              {!authService.isAuthenticated() && (
-                <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                  ⚠️ Cần đăng nhập để thực hiện thao tác
-                </span>
-              )}
-            </p>
-            
-            {/* Smart status indicators */}
-            <div className="flex flex-wrap gap-2 text-xs">
-              <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full">
-                📊 {filteredRooms.length} phòng
+          <p className="text-gray-600">
+            Quản lý thông tin các phòng cho thuê
+            {!authService.isAuthenticated() && (
+              <span className="ml-2 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
+                ⚠️ Cần đăng nhập để thực hiện thao tác
               </span>
-              
-              {/* Local demo rooms count */}
-              {(() => {
-                const localCount = filteredRooms.filter(room => room.id >= 999000).length;
-                return localCount > 0 && (
-                  <span className="px-2 py-1 bg-orange-100 text-orange-800 rounded-full">
-                    🎭 {localCount} demo
-                  </span>
-                );
-              })()}
-              
-              {/* API connection status */}
-              <span className="px-2 py-1 bg-green-100 text-green-800 rounded-full">
-                💎 CyberSoft Connected
-              </span>
-            </div>
-          </div>
+            )}
+          </p>
         </div>
         <div className="flex gap-3">
           <button 
@@ -458,107 +447,107 @@ function RoomManagement() {
 
       {/* Container với chiều cao cố định để tránh layout shift */}
       <div className="min-h-[600px] transition-all duration-300 ease-in-out">
-        <div className={`room-cards-grid transition-opacity duration-200 ${isChangingPage ? 'opacity-50' : 'opacity-100'}`}>
+        <div className={`space-y-4 transition-opacity duration-200 ${isChangingPage ? 'opacity-50' : 'opacity-100'}`}>
         {paginatedRooms.map((room: any) => (
-          <div key={room.id} className={`room-card-fixed bg-white rounded-xl shadow-md hover:shadow-xl hover:scale-[1.02] transition-all duration-300 border border-gray-100 ${deletingRoomId === room.id ? 'opacity-50 pointer-events-none' : ''}`}>
-            <div className="room-card-image relative bg-gray-200 rounded-t-xl overflow-hidden">
-              {room.hinhAnh ? (
-                <img src={room.hinhAnh} alt={room.tenPhong} className="w-full h-full object-cover" />
-              ) : (
-                <div className="flex items-center justify-center h-full text-gray-400">
-                  <span className="text-4xl">🏠</span>
+          <div key={room.id} className={`bg-white rounded-lg shadow-sm hover:shadow-md transition-all duration-300 border border-gray-100 overflow-hidden ${deletingRoomId === room.id ? 'opacity-50 pointer-events-none' : ''}`}>
+            <div className="flex flex-col md:flex-row">
+              {/* Image */}
+              <div className="md:w-64 h-48 md:h-auto flex-shrink-0 relative bg-gray-200">
+                {room.hinhAnh ? (
+                  <img src={room.hinhAnh} alt={room.tenPhong} className="w-full h-full object-cover" />
+                ) : (
+                  <div className="flex items-center justify-center h-full text-gray-400">
+                    <span className="text-4xl">🏠</span>
+                  </div>
+                )}
+                <div className="absolute top-2 right-2 bg-white rounded px-2 py-1 text-xs font-semibold">
+                  #{room.id}
                 </div>
-              )}
-              <div className="absolute top-2 right-2 bg-white rounded px-2 py-1 text-sm font-semibold max-w-[80px] truncate">
-                #{room.id}
+                {/* Demo badge for local rooms */}
+                {room.id >= 999000 && (
+                  <div className="absolute top-2 left-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white px-2 py-1 rounded-full text-xs font-bold shadow-lg">
+                    🎭 DEMO
+                  </div>
+                )}
               </div>
-              {/* Demo badge for local rooms */}
-              {room.id >= 999000 && (
-                <div className="absolute top-2 left-2 bg-gradient-to-r from-orange-500 to-pink-500 text-white px-3 py-1 rounded-full text-xs font-bold shadow-lg">
-                  🎭 DEMO
-                </div>
-              )}
-            </div>
-            
-            <div className="room-card-content">
-              {/* Title - Fixed height */}
-              <div className="room-card-title">
-                <h3 className="font-bold text-lg text-gray-900 line-clamp-2 w-full">
-                  {room.tenPhong}
-                </h3>
-              </div>
-              
-              <div className="room-card-info">
+
+              {/* Info */}
+              <div className="flex-1 p-4 flex flex-col justify-between">
                 <div>
+                  {/* Title */}
+                  <h3 className="font-bold text-lg text-gray-900 mb-2 line-clamp-1">
+                    {room.tenPhong}
+                  </h3>
+
                   {/* Location */}
                   <div className="flex items-center text-gray-600 mb-3">
-                    <MapPin className="w-4 h-4 mr-2 text-red-500 flex-shrink-0" />
-                    <span className="text-sm truncate">
-                      {getLocationName(room.maViTri)}
-                    </span>
+                    <MapPin className="w-4 h-4 mr-1.5 text-red-500 flex-shrink-0" />
+                    <span className="text-sm">Vị trí: {room.maViTri || 'N/A'}</span>
                   </div>
-                  
+
                   {/* Room details */}
-                  <div className="grid grid-cols-2 gap-3 text-sm text-gray-600 mb-3">
+                  <div className="flex flex-wrap gap-4 mb-3 text-sm text-gray-600">
                     <div className="flex items-center">
-                      <span className="text-blue-600 mr-2">👥</span>
+                      <span className="text-blue-600 mr-1">👥</span>
                       <span>{room.khach} khách</span>
                     </div>
                     <div className="flex items-center">
-                      <span className="text-green-600 mr-2">🛏️</span>
-                      <span>{room.phongNgu} PN</span>
+                      <span className="text-green-600 mr-1">🛏️</span>
+                      <span>{room.phongNgu} phòng ngủ</span>
                     </div>
                     <div className="flex items-center">
-                      <span className="text-orange-600 mr-2">🛌</span>
+                      <span className="text-orange-600 mr-1">🛌</span>
                       <span>{room.giuong} giường</span>
                     </div>
                     <div className="flex items-center">
-                      <span className="text-purple-600 mr-2">🚿</span>
-                      <span>{room.phongTam} PT</span>
+                      <span className="text-purple-600 mr-1">🚿</span>
+                      <span>{room.phongTam} phòng tắm</span>
                     </div>
                   </div>
-                  
+
                   {/* Amenities */}
-                  <div className="flex flex-wrap gap-1 mb-3">
+                  <div className="flex flex-wrap gap-1.5 mb-3">
                     {room.wifi && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">📶 WiFi</span>}
-                    {room.dieuHoa && <span className="text-xs bg-cyan-100 text-cyan-600 px-2 py-1 rounded-full">❄️ AC</span>}
+                    {room.dieuHoa && <span className="text-xs bg-cyan-100 text-cyan-600 px-2 py-1 rounded-full">❄️ Điều hòa</span>}
                     {room.bep && <span className="text-xs bg-orange-100 text-orange-600 px-2 py-1 rounded-full">🍳 Bếp</span>}
-                    {room.mayGiat && <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">👕 ML</span>}
+                    {room.mayGiat && <span className="text-xs bg-purple-100 text-purple-600 px-2 py-1 rounded-full">👕 Máy giặt</span>}
+                    {room.tivi && <span className="text-xs bg-pink-100 text-pink-600 px-2 py-1 rounded-full">📺 TV</span>}
+                    {room.hoBoi && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">🏊 Hồ bơi</span>}
                   </div>
                 </div>
-              </div>
-              
-              {/* Price and Actions - Always at bottom */}
-              <div className="room-card-actions">
-                <div className="text-xl font-bold text-green-600 mb-3 text-center">
-                  {formatCurrency(room.giaTien || 0)}/đêm
-                </div>
-                
-                <div className="grid grid-cols-3 gap-2">
-                  <button
-                    onClick={() => openViewModal(room)}
-                    className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-1 text-xs"
-                  >
-                    <Eye className="w-3 h-3" />
-                    Xem
-                  </button>
-                  
-                  <button
-                    onClick={() => openEditModal(room)}
-                    className="bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-1 text-xs"
-                  >
-                    <Edit className="w-3 h-3" />
-                    Sửa
-                  </button>
-                  
-                  <button
-                    onClick={() => handleDelete(room)}
-                    disabled={deletingRoomId === room.id}
-                    className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white py-2 px-3 rounded-lg transition-colors flex items-center justify-center gap-1 text-xs"
-                  >
-                    <Trash2 className="w-3 h-3" />
-                    Xóa
-                  </button>
+
+                {/* Price and Actions */}
+                <div className="flex items-center justify-between pt-3 border-t border-gray-200">
+                  <div className="text-xl font-bold text-rose-600">
+                    {formatCurrency(room.giaTien || 0)}<span className="text-sm font-normal text-gray-600">/đêm</span>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => openViewModal(room)}
+                      className="bg-blue-600 hover:bg-blue-700 text-white py-2 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-sm"
+                    >
+                      <Eye className="w-4 h-4" />
+                      Xem
+                    </button>
+
+                    <button
+                      onClick={() => openEditModal(room)}
+                      className="bg-yellow-600 hover:bg-yellow-700 text-white py-2 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-sm"
+                    >
+                      <Edit className="w-4 h-4" />
+                      Sửa
+                    </button>
+
+                    <button
+                      onClick={() => handleDelete(room)}
+                      disabled={deletingRoomId === room.id}
+                      className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 text-white py-2 px-3 rounded-lg transition-colors flex items-center gap-1.5 text-sm"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      Xóa
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -676,12 +665,12 @@ function RoomManagement() {
       {/* Room CRUD Modal */}
       {showRoomModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-            <div className="sticky top-0 bg-white border-b p-6 flex items-center justify-between">
+          <div className="bg-white rounded-lg w-full max-w-4xl max-h-[90vh] flex flex-col">
+            <div className="flex-shrink-0 bg-white border-b p-6 flex items-center justify-between">
               <h3 className="text-xl font-semibold text-gray-900">
-                {modalMode === 'view' && '👁️ Xem chi tiết phòng'}
-                {modalMode === 'create' && '➕ Thêm phòng mới'}
-                {modalMode === 'edit' && '✏️ Chỉnh sửa phòng'}
+                {modalMode === 'view' && 'Xem chi tiết phòng'}
+                {modalMode === 'create' && 'Thêm phòng mới'}
+                {modalMode === 'edit' && 'Chỉnh sửa phòng'}
               </h3>
               <button
                 onClick={() => setShowRoomModal(false)}
@@ -691,8 +680,7 @@ function RoomManagement() {
               </button>
             </div>
 
-            <div className="p-6">
-              {modalMode === 'view' ? (
+            <div className="flex-1 overflow-y-auto p-6">{modalMode === 'view' ? (
                 // View Mode
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                   <div>
@@ -717,14 +705,6 @@ function RoomManagement() {
                     </div>
                     
                     <div>
-                      <strong>Vị trí:</strong>
-                      <div className="flex items-center mt-1">
-                        <MapPin className="w-4 h-4 mr-2 text-red-500" />
-                        <span className="text-gray-700">{selectedRoom && getLocationName(selectedRoom.maViTri)}</span>
-                      </div>
-                    </div>
-                    
-                    <div>
                       <strong>Mô tả:</strong>
                       <p className="text-gray-600 mt-1">{selectedRoom?.moTa}</p>
                     </div>
@@ -746,19 +726,19 @@ function RoomManagement() {
                   </div>
                 </div>
               ) : (
-                // Create/Edit Mode
-                <form onSubmit={handleSubmit} className="space-y-6">
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    {/* Image Upload */}
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">Hình ảnh</label>
-                      <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+                // Create/Edit Mode - Compact Layout
+                <form onSubmit={handleSubmit} className="space-y-4">
+                  {/* Image Upload - Compact */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Hình ảnh phòng</label>
+                    <div className="flex gap-4">
+                      <div className="w-48 h-32 border-2 border-dashed border-gray-300 rounded-lg overflow-hidden flex-shrink-0">
                         {imagePreview || (modalMode === 'edit' && selectedRoom?.hinhAnh) ? (
-                          <div className="relative">
+                          <div className="relative w-full h-full">
                             <img
                               src={imagePreview || selectedRoom?.hinhAnh}
                               alt="Preview"
-                              className="w-full h-48 object-cover rounded-lg"
+                              className="w-full h-full object-cover"
                             />
                             <button
                               type="button"
@@ -766,184 +746,181 @@ function RoomManagement() {
                                 setImageFile(null);
                                 setImagePreview('');
                               }}
-                              className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1"
+                              className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
                             >
-                              <X className="w-4 h-4" />
+                              <X className="w-3 h-3" />
                             </button>
                           </div>
                         ) : (
-                          <div>
-                            <Upload className="w-12 h-12 text-gray-400 mx-auto mb-2" />
-                            <p className="text-gray-500">Chọn hình ảnh phòng</p>
+                          <div className="flex items-center justify-center h-full text-gray-400">
+                            <Upload className="w-8 h-8" />
                           </div>
                         )}
+                      </div>
+                      <div className="flex-1">
                         <input
                           type="file"
                           accept="image/*"
                           onChange={handleImageChange}
-                          className="mt-2 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
+                          className="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-semibold file:bg-rose-50 file:text-rose-700 hover:file:bg-rose-100"
                         />
-                      </div>
-                    </div>
-
-                    {/* Form Fields */}
-                    <div className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tên phòng *</label>
-                        <input
-                          type="text"
-                          name="tenPhong"
-                          value={formData.tenPhong || ''}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Số khách *</label>
-                          <input
-                            type="number"
-                            name="khach"
-                            value={formData.khach || ''}
-                            onChange={handleInputChange}
-                            required
-                            min="1"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Phòng ngủ *</label>
-                          <input
-                            type="number"
-                            name="phongNgu"
-                            value={formData.phongNgu || ''}
-                            onChange={handleInputChange}
-                            required
-                            min="1"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Giường *</label>
-                          <input
-                            type="number"
-                            name="giuong"
-                            value={formData.giuong || ''}
-                            onChange={handleInputChange}
-                            required
-                            min="1"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                        
-                        <div>
-                          <label className="block text-sm font-medium text-gray-700 mb-1">Phòng tắm *</label>
-                          <input
-                            type="number"
-                            name="phongTam"
-                            value={formData.phongTam || ''}
-                            onChange={handleInputChange}
-                            required
-                            min="1"
-                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                          />
-                        </div>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Giá tiền (VNĐ/đêm) *</label>
-                        <input
-                          type="number"
-                          name="giaTien"
-                          value={formData.giaTien || ''}
-                          onChange={handleInputChange}
-                          required
-                          min="0"
-                          step="1000"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Vị trí *</label>
-                        <select
-                          name="maViTri"
-                          value={formData.maViTri || ''}
-                          onChange={handleInputChange}
-                          required
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                        >
-                          <option value="">Chọn vị trí...</option>
-                          {locationsData?.map((location: Location) => (
-                            <option key={location.id} value={location.id}>
-                              {location.tenViTri}, {location.tinhThanh} - {location.quocGia}
-                            </option>
-                          ))}
-                        </select>
+                        <p className="text-xs text-gray-500 mt-1">Chọn ảnh phòng (khuyến nghị 800x600px)</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Description */}
+                  {/* Basic Info */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="col-span-2">
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Tên phòng *</label>
+                      <input
+                        type="text"
+                        name="tenPhong"
+                        value={formData.tenPhong || ''}
+                        onChange={handleInputChange}
+                        required
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Giá tiền ($/đêm) *</label>
+                      <input
+                        type="number"
+                        name="giaTien"
+                        value={formData.giaTien || ''}
+                        onChange={handleInputChange}
+                        required
+                        min="0"
+                        step="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Mã vị trí *</label>
+                      <input
+                        type="number"
+                        name="maViTri"
+                        value={formData.maViTri || ''}
+                        onChange={handleInputChange}
+                        required
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Room Details - Compact Grid */}
+                  <div className="grid grid-cols-4 gap-3">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Khách *</label>
+                      <input
+                        type="number"
+                        name="khach"
+                        value={formData.khach || ''}
+                        onChange={handleInputChange}
+                        required
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Phòng ngủ *</label>
+                      <input
+                        type="number"
+                        name="phongNgu"
+                        value={formData.phongNgu || ''}
+                        onChange={handleInputChange}
+                        required
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Giường *</label>
+                      <input
+                        type="number"
+                        name="giuong"
+                        value={formData.giuong || ''}
+                        onChange={handleInputChange}
+                        required
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Phòng tắm *</label>
+                      <input
+                        type="number"
+                        name="phongTam"
+                        value={formData.phongTam || ''}
+                        onChange={handleInputChange}
+                        required
+                        min="1"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Description - Compact */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Mô tả</label>
                     <textarea
                       name="moTa"
                       value={formData.moTa || ''}
                       onChange={handleInputChange}
-                      rows={4}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                      rows={2}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                      placeholder="Mô tả ngắn gọn về phòng..."
                     />
                   </div>
 
-                  {/* Amenities */}
+                  {/* Amenities - Compact Grid */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-3">Tiện nghi</label>
-                    <div className="grid grid-cols-3 gap-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Tiện nghi</label>
+                    <div className="grid grid-cols-3 gap-x-4 gap-y-2">
                       {[
                         { key: 'wifi', label: 'WiFi' },
-                        { key: 'mayGiat', label: 'Máy giặt' },
-                        { key: 'banLa', label: 'Bàn là' },
-                        { key: 'tivi', label: 'TV' },
                         { key: 'dieuHoa', label: 'Điều hòa' },
                         { key: 'bep', label: 'Bếp' },
-                        { key: 'doXe', label: 'Chỗ đỗ xe' },
+                        { key: 'mayGiat', label: 'Máy giặt' },
+                        { key: 'tivi', label: 'TV' },
                         { key: 'hoBoi', label: 'Hồ bơi' },
+                        { key: 'doXe', label: 'Đỗ xe' },
+                        { key: 'banLa', label: 'Bàn là' },
                         { key: 'banUi', label: 'Bàn ủi' },
                       ].map(({ key, label }) => (
-                        <label key={key} className="flex items-center space-x-2">
+                        <label key={key} className="flex items-center space-x-2 cursor-pointer hover:bg-gray-50 p-1 rounded">
                           <input
                             type="checkbox"
                             name={key}
                             checked={formData[key as keyof Room] as boolean || false}
                             onChange={handleCheckboxChange}
-                            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                            className="rounded border-gray-300 text-rose-600 focus:ring-rose-500 w-4 h-4"
                           />
-                          <span className="text-sm text-gray-700">{label}</span>
+                          <span className="text-xs text-gray-700">{label}</span>
                         </label>
                       ))}
                     </div>
                   </div>
 
-                  {/* Submit Buttons */}
-                  <div className="flex justify-end space-x-4 pt-4 border-t">
+                  {/* Submit Buttons - Compact */}
+                  <div className="flex justify-end space-x-3 pt-3 border-t">
                     <button
                       type="button"
                       onClick={() => setShowRoomModal(false)}
-                      className="px-6 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                      className="px-5 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
                     >
                       Hủy
                     </button>
                     <button
                       type="submit"
                       disabled={createMutation.isPending || updateMutation.isPending || uploadImageMutation.isPending}
-                      className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                      className="px-5 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2 text-sm transition-colors"
                     >
                       {(createMutation.isPending || updateMutation.isPending || uploadImageMutation.isPending) && (
                         <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>

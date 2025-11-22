@@ -10,29 +10,21 @@ export const userService = {
         pageSize: String(pageSize),
         ...(keyword ? { keyword } : {}),
       });
-      // Try different endpoints
-      console.log('Trying API call to users with params:', qs.toString());
       
-      // Try multiple possible endpoints
+      // Thử nhiều endpoint khác nhau
       let response;
       try {
         response = await api.get(`/users/phan-trang-tim-kiem?${qs.toString()}`);
-        console.log('Success with /users/phan-trang-tim-kiem:', response.data);
       } catch (err1) {
-        console.log('Failed /users/phan-trang-tim-kiem, trying /users...');
         try {
           response = await api.get(`/users?${qs.toString()}`);
-          console.log('Success with /users:', response.data);
         } catch (err2) {
-          console.log('Failed /users, trying /nguoi-dung...');
           response = await api.get(`/nguoi-dung?${qs.toString()}`);
-          console.log('Success with /nguoi-dung:', response.data);
         }
       }
       
       return response.data.content || response.data;
     } catch (error) {
-      console.error("Error fetching users:", error);
       throw error;
     }
   },
@@ -43,7 +35,6 @@ export const userService = {
       const response = await api.get(`/users/${id}`);
       return response.data.content;
     } catch (error) {
-      console.error("Error fetching user:", error);
       throw error;
     }
   },
@@ -54,7 +45,6 @@ export const userService = {
       const response = await api.post("/users", userData);
       return response.data.content;
     } catch (error) {
-      console.error("Error creating user:", error);
       throw error;
     }
   },
@@ -65,7 +55,6 @@ export const userService = {
       const response = await api.put(`/users/${userData.id}`, userData);
       return response.data.content;
     } catch (error) {
-      console.error("Error updating user:", error);
       throw error;
     }
   },
@@ -77,7 +66,6 @@ export const userService = {
         params: { id }
       });
     } catch (error) {
-      console.error("Error deleting user:", error);
       throw error;
     }
   },
@@ -85,40 +73,36 @@ export const userService = {
   // Upload avatar cho người dùng
   uploadAvatar: async (file: File): Promise<User> => {
     try {
-      console.log('Uploading file:', file.name, file.type, file.size);
+      const userStr = localStorage.getItem("user");
+      const user = userStr ? JSON.parse(userStr) : null;
       
-      // Check if user is authenticated
-      const userToken = localStorage.getItem("access_token");
-      console.log('User token exists:', !!userToken);
+      if (!user || !user.accessToken) {
+        throw new Error('Không tìm thấy người dùng hoặc token. Vui lòng đăng nhập lại.');
+      }
       
       const formData = new FormData();
       formData.append("formFile", file);
       
-      // Log FormData contents
-      console.log('FormData prepared, contents:');
-      for (let [key, value] of formData.entries()) {
-        console.log(key, value);
+      const response = await api.post("/users/upload-avatar", formData, {
+        headers: {
+          'Content-Type': 'multipart/form-data',
+          'token': user.accessToken
+        }
+      });
+      
+      const result = response.data.content || response.data;
+      return result;
+    } catch (error: any) {
+      let errorMessage = 'Upload thất bại';
+      if (error?.response?.data?.content) {
+        errorMessage = error.response.data.content;
+      } else if (error?.response?.data?.message) {
+        errorMessage = error.response.data.message;
+      } else if (error?.message) {
+        errorMessage = error.message;
       }
       
-      console.log('Making API call to upload avatar...');
-      
-      // Thử các endpoint có thể:
-      // 1. /users/upload-avatar
-      // 2. /upload-avatar  
-      // 3. /users/avatar
-      const response = await api.post("/users/upload-avatar", formData);
-      
-      console.log('Upload response:', response.data);
-      return response.data.content;
-    } catch (error: any) {
-      console.error("Error uploading avatar:", error);
-      console.error("Error details:", {
-        status: error?.response?.status,
-        statusText: error?.response?.statusText,
-        data: error?.response?.data,
-        message: error?.message
-      });
-      throw error?.response?.data?.message || error?.message || 'Upload failed';
+      throw errorMessage;
     }
   }
 };

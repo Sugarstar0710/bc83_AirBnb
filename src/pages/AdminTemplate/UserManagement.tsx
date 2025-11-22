@@ -28,7 +28,7 @@ const UserSearchBox: React.FC<{ onSearch: (term: string) => void }> = ({ onSearc
         type="text"
         placeholder="Tìm kiếm theo tên, email hoặc số điện thoại..."
         onChange={handleSearch}
-        className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent w-80"
+        className="pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent w-80 shadow-sm hover:border-rose-300 transition-colors"
       />
     </div>
   );
@@ -54,6 +54,7 @@ const UserManagement: React.FC = () => {
       try {
         const result = await userService.getUsers(1, 10000); // Lấy tối đa 10,000 users
         console.log('API Response:', result);
+        console.log('First user sample:', result?.data?.[0]);
         return result;
       } catch (err) {
         console.error('API Error:', err);
@@ -441,127 +442,145 @@ const UserManagement: React.FC = () => {
 
     // Render Add/Edit Modal (Form style)
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-        <div className="bg-white rounded-xl p-6 w-full max-w-lg mx-4 max-h-[90vh] overflow-y-auto">
-          <h3 className="text-lg font-semibold mb-4">
-            {modalType === 'add' && 'Thêm người dùng mới'}
-            {modalType === 'edit' && 'Chỉnh sửa người dùng'}
-          </h3>
-          
-          <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Họ tên *
-              </label>
-              <input
-                type="text"
-                name="name"
-                value={formData.name}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={modalType === 'view'}
-                required
-              />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email *
-              </label>
-              <input
-                type="email"
-                name="email"
-                value={formData.email}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={modalType === 'view'}
-                required
-              />
-            </div>
+      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+        <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl">
+          {/* Header */}
+          <div className="flex-shrink-0 px-6 py-4 border-b border-gray-200">
+            <h3 className="text-xl font-semibold text-gray-900">
+              {modalType === 'add' && 'Thêm người dùng mới'}
+              {modalType === 'edit' && 'Chỉnh sửa người dùng'}
+            </h3>
+          </div>
 
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Số điện thoại
-              </label>
-              <input
-                type="tel"
-                name="phone"
-                value={formData.phone}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={modalType === 'view'}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Ngày sinh
-              </label>
-              <input
-                type="date"
-                name="birthday"
-                value={formData.birthday}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={modalType === 'view'}
-              />
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Giới tính
-              </label>
-              <select
-                name="gender"
-                value={formData.gender.toString()}
-                onChange={(e) => setFormData(prev => ({ ...prev, gender: e.target.value === 'true' }))}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={modalType === 'view'}
-              >
-                <option value="true">Nam</option>
-                <option value="false">Nữ</option>
-              </select>
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Vai trò
-              </label>
-              <select
-                name="role"
-                value={formData.role}
-                onChange={handleInputChange}
-                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                disabled={modalType === 'view'}
-              >
-                <option value="USER">Người dùng</option>
-                <option value="ADMIN">Quản trị viên</option>
-              </select>
-            </div>
-
-            {modalType === 'add' && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mật khẩu *
-                </label>
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleInputChange}
-                  className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                  placeholder="Nhập mật khẩu"
-                  required
-                />
+          {/* Form Content */}
+          <div className="flex-1 overflow-y-auto px-6 py-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
+              {/* Basic Info - 2 Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Họ tên *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                    disabled={modalType === 'view'}
+                    required
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email *
+                  </label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                    disabled={modalType === 'view'}
+                    required
+                  />
+                </div>
               </div>
-            )}
-            
-            <div className="flex justify-end space-x-3 mt-6">
+
+              {/* Contact & Birthday - 2 Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Số điện thoại
+                  </label>
+                  <input
+                    type="tel"
+                    name="phone"
+                    value={formData.phone}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                    disabled={modalType === 'view'}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Ngày sinh
+                  </label>
+                  <input
+                    type="date"
+                    name="birthday"
+                    value={formData.birthday}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                    disabled={modalType === 'view'}
+                  />
+                </div>
+              </div>
+
+              {/* Gender & Role - 2 Columns */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Giới tính
+                  </label>
+                  <select
+                    name="gender"
+                    value={formData.gender.toString()}
+                    onChange={(e) => setFormData(prev => ({ ...prev, gender: e.target.value === 'true' }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm bg-white"
+                    disabled={modalType === 'view'}
+                  >
+                    <option value="true">Nam</option>
+                    <option value="false">Nữ</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Vai trò
+                  </label>
+                  <select
+                    name="role"
+                    value={formData.role}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm bg-white"
+                    disabled={modalType === 'view'}
+                  >
+                    <option value="USER">Người dùng</option>
+                    <option value="ADMIN">Quản trị viên</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Password - Only for Add */}
+              {modalType === 'add' && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Mật khẩu *
+                  </label>
+                  <input
+                    type="password"
+                    name="password"
+                    value={formData.password}
+                    onChange={handleInputChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent text-sm"
+                    placeholder="Nhập mật khẩu"
+                    required
+                  />
+                </div>
+              )}
+            </form>
+          </div>
+
+          {/* Footer Buttons */}
+          <div className="flex-shrink-0 px-6 py-4 border-t border-gray-200 bg-gray-50">
+            <div className="flex justify-end space-x-3">
               <button
                 type="button"
                 onClick={() => {
                   setShowModal(false);
-                  // Reset form khi đóng modal
                   if (modalType === 'add') {
                     setFormData({
                       name: '',
@@ -574,15 +593,23 @@ const UserManagement: React.FC = () => {
                     });
                   }
                 }}
-                className="px-4 py-2 text-gray-600 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                className="px-5 py-2 text-sm text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-100 transition-colors font-medium"
               >
                 Hủy
               </button>
               {modalType !== 'view' && (
                 <button
                   type="submit"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    const form = e.currentTarget.closest('.bg-white')?.querySelector('form');
+                    if (form) {
+                      const submitEvent = new Event('submit', { bubbles: true, cancelable: true });
+                      form.dispatchEvent(submitEvent);
+                    }
+                  }}
                   disabled={updateUserMutation.isPending || createUserMutation.isPending}
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                  className="px-5 py-2 text-sm bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center font-medium shadow-sm"
                 >
                   {(updateUserMutation.isPending || createUserMutation.isPending) && (
                     <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
@@ -591,7 +618,7 @@ const UserManagement: React.FC = () => {
                 </button>
               )}
             </div>
-          </form>
+          </div>
         </div>
       </div>
     );
@@ -609,28 +636,9 @@ const UserManagement: React.FC = () => {
         </div>
         
         <div className="flex items-center gap-4">
-          {/* Statistics Card */}
-          {usersResponse && (
-            <div className="bg-gradient-to-r from-blue-50 to-indigo-50 px-4 py-3 rounded-lg border border-blue-200">
-              <div className="flex items-center gap-3">
-                <div className="flex items-center justify-center w-8 h-8 bg-blue-100 rounded-full">
-                  <span className="text-blue-600 font-semibold text-sm">👥</span>
-                </div>
-                <div>
-                  <div className="text-lg font-bold text-gray-900">
-                    {formatNumber(usersResponse?.totalRow || users.length)}
-                  </div>
-                  <div className="text-xs text-gray-600">
-                    Tổng người dùng
-                  </div>
-                </div>
-              </div>
-            </div>
-          )}
-          
           <button
             onClick={() => handleAction('add')}
-            className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="flex items-center px-4 py-2.5 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors shadow-sm hover:shadow-md font-medium"
           >
             <Plus size={20} className="mr-2" />
             Thêm người dùng
@@ -645,9 +653,8 @@ const UserManagement: React.FC = () => {
             <UserSearchBox onSearch={setSearchTerm} />
           </div>
           <div className="flex items-center space-x-3">
-            <Filter size={20} className="text-gray-400" />
             <select
-              className="px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent bg-white text-gray-700 font-medium shadow-sm hover:border-rose-300 transition-colors"
               value={selectedRole}
               onChange={(e) => setSelectedRole(e.target.value)}
             >
@@ -702,7 +709,44 @@ const UserManagement: React.FC = () => {
               </tr>
             </thead>
             <tbody className="bg-white divide-y divide-gray-200">
-              {paginatedUsers.map((user: User) => (
+              {paginatedUsers.map((user: User) => {
+                // Smart display name logic
+                let userName = 'Unknown User';
+                if (user?.name) {
+                  // Check if name looks like UUID/hash (contains dash or very long)
+                  const isHashName = user.name.includes('-') || user.name.length > 30;
+                  if (!isHashName) {
+                    userName = user.name; // Use real name
+                  } else if (user?.email) {
+                    // Use email prefix if name is hash
+                    const emailPrefix = user.email.split('@')[0];
+                    // Also check if email prefix is hash
+                    const isHashEmail = emailPrefix.includes('-') || emailPrefix.length > 30;
+                    userName = isHashEmail ? `User #${user.id}` : emailPrefix;
+                  }
+                } else if (user?.email) {
+                  userName = user.email.split('@')[0];
+                }
+                
+                const userInitial = userName.charAt(0).toUpperCase();
+                
+                // Format birthday to dd/MM/yyyy
+                let formattedBirthday = 'Chưa có';
+                if (user.birthday) {
+                  try {
+                    const date = new Date(user.birthday);
+                    if (!isNaN(date.getTime())) {
+                      const day = String(date.getDate()).padStart(2, '0');
+                      const month = String(date.getMonth() + 1).padStart(2, '0');
+                      const year = date.getFullYear();
+                      formattedBirthday = `${day}/${month}/${year}`;
+                    }
+                  } catch (e) {
+                    formattedBirthday = 'Chưa có';
+                  }
+                }
+                
+                return (
                 <tr key={user.id} className="hover:bg-gray-50">
                   <td className="px-6 py-4 whitespace-nowrap">
                     <div className="flex items-center">
@@ -711,32 +755,41 @@ const UserManagement: React.FC = () => {
                           <img 
                             className="h-10 w-10 rounded-full object-cover border" 
                             src={user.avatar} 
-                            alt={user.name}
+                            alt={userName}
                             onError={(e) => {
                               // Fallback to initial if image fails to load
-                              e.currentTarget.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPGNpcmNsZSBjeD0iMjAiIGN5PSIyMCIgcj0iMjAiIGZpbGw9IiMzQjgyRjYiLz4KPHRleHQgeD0iNTAlIiB5PSI1MCUiIGZvbnQtZmFtaWx5PSJBcmlhbCIgZm9udC1zaXplPSIxNCIgZmlsbD0id2hpdGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGR5PSIuM2VtIj4ke3VzZXIubmFtZS5jaGFyQXQoMCl9PC90ZXh0Pgo8L3N2Zz4K';
+                              e.currentTarget.style.display = 'none';
+                              if (e.currentTarget.nextElementSibling) {
+                                (e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex';
+                              }
                             }}
                           />
-                        ) : (
-                          <div className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center">
-                            <span className="text-white font-medium">
-                              {user.name.charAt(0)}
-                            </span>
-                          </div>
-                        )}
+                        ) : null}
+                        <div 
+                          className="h-10 w-10 rounded-full bg-blue-500 flex items-center justify-center"
+                          style={{ display: user.avatar ? 'none' : 'flex' }}
+                        >
+                          <span className="text-white font-medium">
+                            {userInitial}
+                          </span>
+                        </div>
                       </div>
-                      <div className="ml-4">
-                        <div className="text-sm font-medium text-gray-900">{user.name}</div>
-                        <div className="text-sm text-gray-500">ID: {user.id}</div>
+                      <div className="ml-4 min-w-0 flex-1">
+                        <div className="text-sm font-medium text-gray-900 truncate max-w-xs" title={userName}>
+                          {userName}
+                        </div>
+                        <div className="text-sm text-gray-500">ID: {user?.id || 'N/A'}</div>
                       </div>
                     </div>
                   </td>
-                  <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.email}</div>
-                    <div className="text-sm text-gray-500">{user.phone || 'Chưa có SĐT'}</div>
+                  <td className="px-6 py-4">
+                    <div className="text-sm text-gray-900 truncate max-w-xs" title={user?.email || 'N/A'}>
+                      {user?.email || 'N/A'}
+                    </div>
+                    <div className="text-sm text-gray-500">{user?.phone || 'Chưa có SĐT'}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
-                    <div className="text-sm text-gray-900">{user.birthday || 'Chưa có'}</div>
+                    <div className="text-sm text-gray-900">{formattedBirthday}</div>
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap">
                     <span className="text-sm text-gray-900">
@@ -783,7 +836,7 @@ const UserManagement: React.FC = () => {
                     </div>
                   </td>
                 </tr>
-              ))}
+              )})}
               
               {/* Empty rows để giữ chiều cao cố định */}
               {Array.from({ length: Math.max(0, usersPerPage - paginatedUsers.length) }).map((_, index) => (

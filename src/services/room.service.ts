@@ -34,9 +34,27 @@ export const phongServices = {
   },
   
   updatePhong: (id: number, phongData: Partial<Room>) => {
+    // Đảm bảo gửi đầy đủ các field bắt buộc
     const requestData = {
       id: id,
-      ...phongData
+      tenPhong: phongData.tenPhong,
+      khach: Number(phongData.khach),
+      phongNgu: Number(phongData.phongNgu), 
+      giuong: Number(phongData.giuong),
+      phongTam: Number(phongData.phongTam),
+      moTa: phongData.moTa || "",
+      giaTien: Number(phongData.giaTien),
+      mayGiat: Boolean(phongData.mayGiat),
+      banLa: Boolean(phongData.banLa),
+      tivi: Boolean(phongData.tivi),
+      dieuHoa: Boolean(phongData.dieuHoa),
+      wifi: Boolean(phongData.wifi),
+      bep: Boolean(phongData.bep),
+      doXe: Boolean(phongData.doXe),
+      hoBoi: Boolean(phongData.hoBoi),
+      banUi: Boolean(phongData.banUi),
+      maViTri: Number(phongData.maViTri),
+      hinhAnh: phongData.hinhAnh || ""
     };
     
     return axiosWithAuth.put<{ statusCode: number; content: Room }>(`/phong-thue/${id}`, requestData);

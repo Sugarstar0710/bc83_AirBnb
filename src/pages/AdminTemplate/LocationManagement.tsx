@@ -10,7 +10,7 @@ interface LocationModalProps {
   showModal: boolean;
   modalType: 'add' | 'edit' | 'view';
   formData: Partial<Location>;
-  onInputChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
+  onInputChange: (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => void;
   onSubmit: (e: React.FormEvent) => void;
   onClose: () => void;
   isSubmitting: boolean;
@@ -25,6 +25,20 @@ const LocationModal: React.FC<LocationModalProps> = ({
   onClose,
   isSubmitting
 }) => {
+  const [showCustomCountry, setShowCustomCountry] = useState(false);
+  
+  // Check if current country is one of the predefined ones
+  React.useEffect(() => {
+    if (formData.quocGia) {
+      const country = formData.quocGia.toLowerCase();
+      const isPredefined = 
+        country === 'việt nam' || 
+        country === 'trung quốc' || 
+        country === 'thái lan';
+      setShowCustomCountry(!isPredefined);
+    }
+  }, [formData.quocGia]);
+  
   if (!showModal) return null;
 
   // View mode - Hiển thị đẹp như User Management
@@ -138,7 +152,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
               name="tenViTri"
               value={formData.tenViTri || ''}
               onChange={onInputChange}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent"
               placeholder="Ví dụ: Quận 1, Ba Đình..."
               required
             />
@@ -153,7 +167,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
               name="tinhThanh"
               value={formData.tinhThanh || ''}
               onChange={onInputChange}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent"
               placeholder="Ví dụ: Hồ Chí Minh, Hà Nội..."
               required
             />
@@ -163,15 +177,41 @@ const LocationModal: React.FC<LocationModalProps> = ({
             <label className="block text-sm font-medium text-gray-700 mb-1">
               Quốc gia *
             </label>
-            <input
-              type="text"
+            <select
               name="quocGia"
-              value={formData.quocGia || ''}
-              onChange={onInputChange}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-              placeholder="Ví dụ: Việt Nam"
-              required
-            />
+              value={showCustomCountry ? 'other' : (formData.quocGia || '')}
+              onChange={(e) => {
+                if (e.target.value === 'other') {
+                  setShowCustomCountry(true);
+                  // Clear the country value to allow custom input
+                  onInputChange({ ...e, target: { ...e.target, name: 'quocGia', value: '' } } as any);
+                } else {
+                  setShowCustomCountry(false);
+                  onInputChange(e);
+                }
+              }}
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent"
+              required={!showCustomCountry}
+              disabled={modalType === 'view'}
+            >
+              <option value="">Chọn quốc gia</option>
+              <option value="Việt Nam">Việt Nam</option>
+              <option value="Trung Quốc">Trung Quốc</option>
+              <option value="Thái Lan">Thái Lan</option>
+              <option value="other">Khác (nhập tên quốc gia)</option>
+            </select>
+            
+            {showCustomCountry && modalType !== 'view' && (
+              <input
+                type="text"
+                name="quocGia"
+                value={formData.quocGia || ''}
+                onChange={onInputChange}
+                className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent mt-2"
+                placeholder="Nhập tên quốc gia..."
+                required
+              />
+            )}
           </div>
           
           <div>
@@ -183,7 +223,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
               name="hinhAnh"
               value={formData.hinhAnh || ''}
               onChange={onInputChange}
-              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent"
               placeholder="https://example.com/image.jpg"
             />
           </div>
@@ -199,7 +239,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+              className="px-6 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors disabled:opacity-50"
             >
               {isSubmitting ? 'Đang xử lý...' : (modalType === 'add' ? 'Thêm' : 'Cập nhật')}
             </button>
@@ -212,6 +252,7 @@ const LocationModal: React.FC<LocationModalProps> = ({
 
 const LocationManagement: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [countryFilter, setCountryFilter] = useState<string>('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState<'add' | 'edit' | 'view'>('add');
@@ -220,7 +261,7 @@ const LocationManagement: React.FC = () => {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [locationToDelete, setLocationToDelete] = useState<Location | null>(null);
   
-  const pageSize = 8; // 8 locations per page
+  const pageSize = 10; // 10 locations per page
   const queryClient = useQueryClient();
 
   // BC83 pattern - Load locations
@@ -298,17 +339,48 @@ const LocationManagement: React.FC = () => {
   const filteredLocations = useMemo(() => {
     if (!locationsData) return [];
     
-    if (!searchTerm.trim()) {
-      return locationsData;
+    let filtered = locationsData;
+    
+    // Filter by country
+    if (countryFilter !== 'all') {
+      filtered = filtered.filter((location: Location) => {
+        const country = location.quocGia?.toLowerCase().trim() || '';
+        
+        // Debug: log country values
+        if (countryFilter === 'other') {
+          console.log('Country value:', `"${location.quocGia}"`, '-> normalized:', `"${country}"`);
+        }
+        
+        if (countryFilter === 'vietnam') {
+          return country === 'việt nam' || country === 'vietnam';
+        } else if (countryFilter === 'china') {
+          return country === 'trung quốc' || country === 'china';
+        } else if (countryFilter === 'thailand') {
+          return country === 'thái lan' || country === 'thailand';
+        } else if (countryFilter === 'other') {
+          // Exclude Vietnam, China, and Thailand
+          const isVietnam = country === 'việt nam' || country === 'vietnam' || country.includes('việt') || country.includes('viet');
+          const isChina = country === 'trung quốc' || country === 'china' || country.includes('trung');
+          const isThailand = country === 'thái lan' || country === 'thailand' || country.includes('thái') || country.includes('thai');
+          
+          return !isVietnam && !isChina && !isThailand;
+        }
+        return true;
+      });
     }
     
-    const term = searchTerm.toLowerCase();
-    return locationsData.filter((location: Location) =>
-      location.tenViTri?.toLowerCase().includes(term) ||
-      location.tinhThanh?.toLowerCase().includes(term) ||
-      location.quocGia?.toLowerCase().includes(term)
-    );
-  }, [locationsData, searchTerm]);
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const term = searchTerm.toLowerCase();
+      filtered = filtered.filter((location: Location) =>
+        location.tenViTri?.toLowerCase().includes(term) ||
+        location.tinhThanh?.toLowerCase().includes(term) ||
+        location.quocGia?.toLowerCase().includes(term)
+      );
+    }
+    
+    return filtered;
+  }, [locationsData, searchTerm, countryFilter]);
 
   // Paginate filtered results
   const paginatedLocations = useMemo(() => {
@@ -404,87 +476,111 @@ const LocationManagement: React.FC = () => {
         </div>
         <button
           onClick={() => handleAction('add')}
-          className="flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="flex items-center px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors shadow-sm"
         >
           <Plus size={20} className="mr-2" />
           Thêm địa điểm
         </button>
       </div>
 
-      {/* Search */}
+      {/* Search and Filter */}
       <div className="bg-white rounded-xl shadow-sm p-6 border border-gray-200">
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
-          <input
-            type="text"
-            placeholder="Tìm kiếm theo tên vị trí, tỉnh thành hoặc quốc gia..."
-            className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
-          />
+        <div className="flex flex-col md:flex-row gap-4">
+          {/* Search box */}
+          <div className="relative flex-1">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400" size={20} />
+            <input
+              type="text"
+              placeholder="Tìm kiếm theo tên vị trí, tỉnh thành hoặc quốc gia..."
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent shadow-sm hover:shadow transition-shadow"
+              value={searchTerm}
+              onChange={(e) => handleSearch(e.target.value)}
+            />
+          </div>
+
+          {/* Country filter */}
+          <div className="w-full md:w-64">
+            <select
+              value={countryFilter}
+              onChange={(e) => {
+                setCountryFilter(e.target.value);
+                setCurrentPage(1);
+              }}
+              className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-rose-500 focus:border-transparent shadow-sm hover:shadow transition-shadow bg-white text-gray-700"
+            >
+              <option value="all">Tất cả quốc gia</option>
+              <option value="vietnam">Việt Nam</option>
+              <option value="china">Trung Quốc</option>
+              <option value="thailand">Thái Lan</option>
+              <option value="other">Các nước khác</option>
+            </select>
+          </div>
         </div>
       </div>
 
-      {/* Locations Grid */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-        <div className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {paginatedLocations.map((location) => (
-              <div key={location.id} className="border border-gray-200 rounded-lg overflow-hidden hover:shadow-md transition-shadow">
-                <div className="aspect-w-16 aspect-h-9">
-                  <img
-                    src={location.hinhAnh}
-                    alt={location.tenViTri}
-                    className="w-full h-48 object-cover"
-                  />
-                </div>
-                <div className="p-4">
-                  <h3 className="font-semibold text-gray-900 mb-2">
-                    {location.tenViTri}
-                  </h3>
-                  
-                  <div className="space-y-2 text-sm text-gray-600 mb-4">
-                    <div className="flex items-center">
-                      <MapPin size={16} className="mr-2 text-gray-400" />
-                      {location.tinhThanh}
+      {/* Locations List */}
+      <div className="space-y-4">
+        {paginatedLocations.map((location) => (
+          <div key={location.id} className="bg-white rounded-lg border border-gray-200 shadow-sm hover:shadow-md transition-shadow flex flex-col md:flex-row overflow-hidden">
+            {/* Location Image */}
+            <div className="w-full md:w-64 h-48 md:h-auto flex-shrink-0">
+              <img
+                src={location.hinhAnh}
+                alt={location.tenViTri}
+                className="w-full h-full object-cover"
+              />
+            </div>
+
+            {/* Location Details */}
+            <div className="flex-1 p-4 flex flex-col justify-between">
+              <div>
+                <div className="flex items-start justify-between mb-2">
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                      {location.tenViTri}
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-3 mb-3">
+                      <div className="flex items-center text-sm text-gray-600">
+                        <MapPin size={16} className="mr-1.5 text-rose-500" />
+                        <span className="font-medium">{location.tinhThanh}</span>
+                      </div>
+                      <div className="flex items-center text-sm text-gray-600">
+                        <Globe size={16} className="mr-1.5 text-rose-500" />
+                        <span className="font-medium">{location.quocGia}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center">
-                      <Globe size={16} className="mr-2 text-gray-400" />
-                      {location.quocGia}
-                    </div>
-                  </div>
-                  
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs text-gray-500">ID: {location.id}</span>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        onClick={() => handleAction('view', location)}
-                        className="text-blue-600 hover:text-blue-800 p-1 rounded"
-                        title="Xem chi tiết"
-                      >
-                        <Eye size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleAction('edit', location)}
-                        className="text-green-600 hover:text-green-800 p-1 rounded"
-                        title="Chỉnh sửa"
-                      >
-                        <Edit2 size={16} />
-                      </button>
-                      <button
-                        onClick={() => handleAction('delete', location)}
-                        className="text-red-600 hover:text-red-800 p-1 rounded"
-                        title="Xóa"
-                      >
-                        <Trash2 size={16} />
-                      </button>
+                    <div className="inline-flex items-center px-3 py-1 bg-gray-100 rounded-full text-xs text-gray-600">
+                      <span className="font-medium">Mã vị trí:</span>
+                      <span className="ml-1.5 text-gray-800 font-semibold">#{location.id}</span>
                     </div>
                   </div>
                 </div>
               </div>
-            ))}
+
+              {/* Actions */}
+              <div className="flex items-center gap-2 mt-4 pt-3 border-t border-gray-100">
+                <button
+                  onClick={() => handleAction('view', location)}
+                  className="px-3 py-1.5 text-sm text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-md transition-colors"
+                >
+                  Xem chi tiết
+                </button>
+                <button
+                  onClick={() => handleAction('edit', location)}
+                  className="px-3 py-1.5 text-sm text-white bg-rose-600 hover:bg-rose-700 rounded-md transition-colors"
+                >
+                  Chỉnh sửa
+                </button>
+                <button
+                  onClick={() => handleAction('delete', location)}
+                  className="px-3 py-1.5 text-sm text-white bg-red-600 hover:bg-red-700 rounded-md transition-colors"
+                >
+                  Xóa
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        ))}
       </div>
 
       {/* Empty State */}
@@ -499,7 +595,7 @@ const LocationManagement: React.FC = () => {
           </p>
           <button
             onClick={() => handleAction('add')}
-            className="inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            className="inline-flex items-center px-4 py-2 bg-rose-600 text-white rounded-lg hover:bg-rose-700 transition-colors"
           >
             <Plus size={20} className="mr-2" />
             Thêm địa điểm mới
@@ -540,7 +636,7 @@ const LocationManagement: React.FC = () => {
                       onClick={() => handlePageChange(page)}
                       className={`px-3 py-2 text-sm rounded-lg transition-colors ${
                         page === currentPage
-                          ? 'bg-blue-600 text-white border border-blue-600'
+                          ? 'bg-rose-600 text-white border border-rose-600'
                           : 'bg-white text-gray-700 border border-gray-300 hover:bg-gray-50'
                       }`}
                     >

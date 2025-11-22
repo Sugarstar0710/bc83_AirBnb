@@ -16,8 +16,5 @@ export const formatDate = (date: Date): string => {
 
 // Utility function để format tiền tệ
 export const formatCurrency = (amount: number): string => {
-  return new Intl.NumberFormat('vi-VN', {
-    style: 'currency',
-    currency: 'VND'
-  }).format(amount);
+  return `$${new Intl.NumberFormat('en-US').format(amount)}`;
 };
